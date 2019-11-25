@@ -75,6 +75,70 @@ db.air_routes.aggregate([
   }
 ]);
 
+// which alliance has the most unique airlines operating between jfk and lhr
+db.air_routes.aggregate([
+  {
+    $match: { $or: [{ src_airport: "JFK", dst_airport: "LHR" }, { src_airport: "LHR", dst_airport: "JFK" }] }
+  },
+  {
+    $lookup: {
+      from: "air_alliances",
+      localField: "airline.name",
+      foreignField: "airlines",
+      as: "alliance"
+    }
+  },
+  {
+    $unwind: "$alliance"
+  },
+  {
+    $group: {
+      _id: "$alliance.name",
+      jfkToLhr: { $addToSet: "$airline.name" }
+    }
+  },
+  {
+    $sort: { jfkToLhr: -1}
+  },
+  {
+    $limit: 1
+  }
+])
+
+db.air_routes.aggregate([
+  {
+    $match: {
+      src_airport: { $in: ["LHR", "JFK"] },
+      dst_airport: { $in: ["LHR", "JFK"] }
+    }
+  },
+  {
+    $lookup: {
+      from: "air_alliances",
+      foreignField: "airlines",
+      localField: "airline.name",
+      as: "alliance"
+    }
+  },
+  {
+    $match: { alliance: { $ne: [] } }
+  },
+  {
+    $addFields: {
+      alliance: { $arrayElemAt: ["$alliance.name", 0] }
+    }
+  },
+  {
+    $group: {
+      _id: "$airline.id",
+      alliance: { $first: "$alliance" }
+    }
+  },
+  {
+    $sortByCount: "$alliance"
+  }
+])
+
 // Find the list of all possible distinct destinations, with at most one layover,
 // departing from the base airports of airlines that make part of the "OneWorld" alliance.
 // The airlines should be national carriers from Germany, Spain or Canada only.
